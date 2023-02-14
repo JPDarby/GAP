@@ -398,8 +398,6 @@ module descriptors_module
       logical :: initialised = .false.
 
       character(len=STRING_LENGTH) :: radial_basis
-      real(dp), dimension(:,:,:), allocatable :: QR_factor
-      real(dp), dimension(:,:), allocatable :: QR_tau
       type(LA_matrix), dimension(:), allocatable :: LA_BL_ti
    endtype soap
 
@@ -2697,11 +2695,6 @@ module descriptors_module
             RAISE_ERROR("soap_initialise: radial_basis not recognised: EQUISPACED_GAUSS, POLY or GTO" ,error)
          endif
 
-         !allocate(this%BL_ti(0:this%l_max, n_radial_grid, this%n_max))
-         ! extract factor and tau as these are only bits needed for QR_solve
-         allocate(this%QR_factor( size(this%r_basis), this%n_max, 0:this%l_max))
-         allocate(this%QR_tau(this%n_max, 0:this%l_max))
-
          ! per l
          do l = 0, l_ub
             ! cholesky factorisation
@@ -2717,17 +2710,9 @@ module descriptors_module
             !find inverse of L^T, NOTE: reusing overlap basis in a confusing way here
             overlap_basis(:, :, l) = transpose(this%cholesky_overlap_basis(:, :, l))
             call dtrtri("U", "N", this%n_max, overlap_basis(:, :, l), this%n_max, i)
-            ! form B(L^T)^-1 and do QR factorisation in prep for solving equations.
-            !this%BL_ti(l, :, :) =  matmul(covariance_basis(l, :, :), overlap_basis(l, :, :))
-
-            call initialise(LA_BL_ti(l), matmul(covariance_basis(:, :, l), overlap_basis(:, :, l)))
-            call LA_Matrix_QR_Factorise(LA_BL_ti(l), Q, R, error)
 
             call initialise(this%LA_BL_ti(l), matmul(covariance_basis(:, :, l), overlap_basis(:, :, l)))
             call LA_Matrix_QR_Factorise(this%LA_BL_ti(l), Q, R, error)
-
-            this%QR_factor(:, :, l) = LA_BL_ti(l)%factor
-            this%QR_tau(:, l) = LA_BL_ti(l)%tau
 
             call finalise(LA_covariance_basis)
             call finalise(LA_overlap_basis)
@@ -2735,8 +2720,6 @@ module descriptors_module
 
          if (l_ub == 0 .and. this%l_max > 0) then
             do l = 1, this%l_max
-               this%QR_factor(:, :, l) = this%QR_factor(:, :, 0)
-               this%QR_tau(:, l) = this%QR_tau(:, 0)
                this%LA_Bl_ti(l) = this%LA_Bl_ti(0)
             enddo
          endif
@@ -2795,8 +2778,6 @@ module descriptors_module
       if(allocated(this%species_Z)) deallocate(this%species_Z)
       if(allocated(this%Z)) deallocate(this%Z)
 
-      if (allocated(this%QR_factor)) deallocate(this%QR_factor)
-      if (allocated(this%QR_tau)) deallocate(this%QR_tau)
       if (allocated(this%LA_BL_ti))  then
          do l = 0, this%l_max
             call finalise(this%LA_BL_ti(l))
@@ -7364,16 +7345,12 @@ module descriptors_module
       complex(dp) :: c_tmp(3)
       integer :: max_n_neigh
 
-      ! Create a thread private QR_factor here as dormqr modifies it and restores it during solve
-      ! and this doesn't work with OMP threading, hence the thread private copy.
-      real(dp), dimension(:,:,:), allocatable, save :: QR_factor
-
 !$omp threadprivate(radial_fun, radial_coefficient, grad_radial_fun, grad_radial_coefficient)
 !$omp threadprivate(sphericalycartesian_all_t, gradsphericalycartesian_all_t)
 !$omp threadprivate(fourier_so3_r, fourier_so3_i)
 !$omp threadprivate(SphericalY_ij,grad_SphericalY_ij)
 !$omp threadprivate(descriptor_i, grad_descriptor_i)
-!$omp threadprivate(grad_fourier_so3_r, grad_fourier_so3_i, QR_factor)
+!$omp threadprivate(grad_fourier_so3_r, grad_fourier_so3_i)
 
 
       INIT_ERROR(error)
@@ -7511,13 +7488,6 @@ module descriptors_module
             enddo
          enddo
       enddo
-
-      if (this%radial_basis /= "EQUISPACED_GAUSS") then
-         allocate(QR_factor(size(this%r_basis), this%n_max, 0:this%l_max))
-         do l = 0, this%l_max
-            QR_factor(:, :, l) = this%QR_factor(:, :, l)
-         enddo
-      endif
 
       do l = 0, this%l_max
          allocate(SphericalY_ij(l)%m(-l:l))
@@ -7691,12 +7661,7 @@ module descriptors_module
             do a = 1, size(this%r_basis)
                radial_fun(0,a) = exp( -this%alpha * this%r_basis(a)**2 ) !* this%r_basis(a)
             enddo
-            !call LA_Matrix_QR_Solve_Vector(LA_BL_ti(0), radial_fun(0, :), radial_coefficient(0, :))
-            !call Matrix_QR_Solve(QR_factor(:, :, 0), this%QR_tau(:, 0), radial_fun(0, :), radial_coefficient(0, :))
-            !print*, "jpd47 correct radial_coefficient is", radial_coefficient(0, :)
-            !jpd47 new approach
             call Factored_LA_Matrix_QR_Solve_vector(this%LA_Bl_ti(0), radial_fun(0, :), radial_coefficient(0, :))
-            print*, "jpd47 new radial_coefficient is", radial_coefficient(0, :)
             ! alternative approach: don't invert L^T and multiply at the end. Doesn't work as well for POLY basis
             !radial_coefficient = matmul(radial_coefficient, this%cholesky_overlap_basis(0, :, :))
          endif
@@ -7809,15 +7774,12 @@ module descriptors_module
                radial_coefficient = radial_coefficient * f_cut
             else
                do l = 0, this%l_max
-                  !call LA_Matrix_QR_Solve_Vector(LA_BL_ti(l), radial_fun(l, :), radial_coefficient(l, :))
-                  !call Matrix_QR_Solve(QR_factor(:, :, l), this%QR_tau(:, l), radial_fun(l, :), radial_coefficient(l, :))
                   call Factored_LA_Matrix_QR_Solve_vector(this%LA_Bl_ti(l), radial_fun(l, :), radial_coefficient(l, :))
                   !radial_coefficient(l, :) = matmul(radial_coefficient(l, :), this%cholesky_overlap_basis(l, :, :))
                enddo
                if(my_do_grad_descriptor) then
                   !grad_radial_coefficient = matmul( grad_radial_fun, transpose(this%transform_basis )) * f_cut + radial_coefficient * df_cut
                   do l = 0, this%l_max
-                     !call Matrix_QR_Solve(QR_factor(:, :, l), this%QR_tau(:, l), grad_radial_fun(l, :), grad_radial_coefficient(l, :))
                      call Factored_LA_Matrix_QR_Solve_vector(this%LA_Bl_ti(l), grad_radial_fun(l, :), grad_radial_coefficient(l, :))
                   enddo
                   grad_radial_coefficient = grad_radial_coefficient * f_cut + radial_coefficient * df_cut
@@ -8140,7 +8102,6 @@ module descriptors_module
         !SPEED deallocate(grad_fourier_so3)
         if (allocated(grad_fourier_so3_r)) deallocate(grad_fourier_so3_r)
         if (allocated(grad_fourier_so3_i)) deallocate(grad_fourier_so3_i)
-        if (allocated(QR_factor)) deallocate(QR_factor)
 !$omp end parallel
 
       if(this%global) then
