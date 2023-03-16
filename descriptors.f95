@@ -7387,6 +7387,7 @@ module descriptors_module
          sym_desc = .true.
       endif
 
+      species_map = 0
       do i_species = 1, this%n_species
          if(this%species_Z(i_species) == 0) then
             species_map = 1
