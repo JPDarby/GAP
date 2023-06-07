@@ -2,7 +2,7 @@
 
 The length of the standard SOAP vector (powerspectrum)
 
-$$p^{\alpha\beta}_{nn'l} = \sum_m c^\alpha_{nlm} c^\beta_{n'lm} = \bf{c}^\alpha_{nl} \cdot  \bf{c}^\beta_{n'l}$$
+$$p^{\alpha\beta}_{nn'l} = \sum_m c^\alpha_{nlm} c^\beta_{n'lm} = \mathbf{c}^\alpha_{nl} \cdot  \mathbf{c}^\beta_{n'l}$$
 
  is $\frac{1}{2}NS(NS+1)(L+1) + 1$ where $N$=`n_max`, $S$=`n_species`, $L$=`l_max` and the final element is `covariance_sigma0` (set after normalisation). Various compression strategies are available to reduce this $\mathcal{O}(N^2S^2)$ scaling.
 
@@ -10,7 +10,7 @@ $$p^{\alpha\beta}_{nn'l} = \sum_m c^\alpha_{nlm} c^\beta_{n'lm} = \bf{c}^\alpha_
 
 The tensor-reduction introudced in [Tensor-reduced atomic density representations](https://doi.org/10.48550/arXiv.2210.01705) can be applied by first selecting which "density channels" (radial, species or both) are mixed together before selecting how the mixed channels should be coupled together (tensor product, element-wise). Tensor decomposition using radial-species mixing with element-wise coupling is written as
 
-$$p_{kl} = \sum_m c_{klm} c_{klm} = \bf{c}_{kl} \cdot \bf{c}_{kl} $$
+$$p_{kl} = \sum_m c_{klm} c_{klm} = \mathbf{c}_{kl} \cdot \mathbf{c}_{kl} $$
 
 where
  $$c_{klm} = \sum_{\alpha n} W^k_{\alpha n} c^\alpha_{nlm} $$
