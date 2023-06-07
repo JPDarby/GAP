@@ -2,7 +2,7 @@
 
 The length of the standard SOAP vector (powerspectrum)
 
-$$p^{\alpha\beta}_{nn'l} = \sum_m c^\alpha_{nlm} c^\beta_{n'lm} = \vec{c}^\alpha_{nl} \cdot  \vec{c}^\beta_{n'l}$$
+$$p^{\alpha \beta}_{nn'l} = \sum_m c^\alpha_{nlm} c^\beta_{n'lm} = \vec{c}^\alpha_{nl} \cdot \vec{c}^\beta_{n'l}$$
 
  is $\frac{1}{2}NS(NS+1)(L+1) + 1$ where $N$=`n_max`, $S$=`n_species`, $L$=`l_max` and the final element is `covariance_sigma0` (set after normalisation). Various compression strategies are available to reduce this $\mathcal{O}(N^2S^2)$ scaling.
 
